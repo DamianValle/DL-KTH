@@ -28,13 +28,17 @@ def load_batch(fpath, label_key='labels'):
     data = data.reshape(data.shape[0], 3, 32, 32)
     return np.array(data), np.array(labels)
 
+def softmax(x):
+    """ Standard definition of the softmax function """
+    return np.exp(x) / np.sum(np.exp(x), axis=0)
+
 def evaluate_classifier(X, W, b):
     P = np.zeros((X.shape[0], K))
     
     for i in range(X.shape[0]):
-        P[i] = np.dot(W, X[0]) + b
+        P[i] = np.dot(W, X[i]) + b
         
-    return np.exp(P) / np.sum(np.exp(P), axis=0)
+    return np.array([softmax(x) for x in P])
 
 def compute_cost(X, Y, W, b, lamb):
     
@@ -43,8 +47,8 @@ def compute_cost(X, Y, W, b, lamb):
     P = evaluate_classifier(X, W, b)
     
     for i in range(X.shape[0]):
-        cost += -np.log2(P[i][Y[i]] + sys.float_info.epsilon)
-        
+        cost -= np.log2(P[i][Y[i]] + sys.float_info.epsilon)
+    
     cost /=  X.shape[0]
     
     cost += lamb * np.sum(W**2)
