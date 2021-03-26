@@ -15,35 +15,25 @@ def main():
     x_val, y_val = load_batch(val_fpath)
     x_test, y_test = load_batch(test_fpath)
 
-    print('x_train shape:\t', x_train.shape, '\t y_train shape:\t', y_train.shape)
-    print('x_val shape:\t', x_val.shape, '\t y_val shape:\t', y_val.shape)
-    print('x_test shape:\t', x_test.shape, '\t y_test shape:\t', y_test.shape)
-
     mean, std = x_train.mean(axis=0), x_train.std(axis=0)
-    print('mean shape:\t', mean.shape, '\nstd shape:\t', std.shape)
 
     x_train = ( x_train - mean ) / std
-    x_val = ( x_val- mean ) / std
+    x_val = ( x_val - mean ) / std
     x_test = ( x_test - mean ) / std
-
-    y_train = one_hot(y_train)
-
+    
     x_train = x_train.T
     y_train = y_train.T
+    x_val = x_val.T
+    y_val = y_val.T
+    x_test = x_test.T
+    y_test = y_test.T
 
-    print("x_train shape ", x_train.shape)
-
-    np.random.seed(400)
-    random.seed(400)
-
-
-    ann = ANN(x_train, y_train)
-    ann.evaluate_classifier(x_train[:, :15])
-    
-    ann.minibatch_gd(x_train[:, :], y_train[:, :], x_train[:, :], y_train[:, :])
+    ann = ANN()
+    ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
 
 def load_batch(fpath, label_key='labels'):
-    """Internal utility for parsing CIFAR data.
+    """
+    Internal utility for parsing CIFAR data.
     # Arguments
         fpath: path the file to parse.
         label_key: key for label data in the retrieve
@@ -65,7 +55,7 @@ def load_batch(fpath, label_key='labels'):
     labels = d[label_key]
 
     data = data.reshape(data.shape[0], 3072)
-    return np.array(data), np.array(labels)
+    return np.array(data), one_hot(np.array(labels))
 
 def one_hot(Y):
     shape = (Y.size, Y.max()+1)
@@ -74,7 +64,6 @@ def one_hot(Y):
     one_hot[rows, Y] = 1
     
     return one_hot
-
 
 if __name__ == "__main__":
     main()

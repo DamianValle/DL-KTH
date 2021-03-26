@@ -7,31 +7,34 @@ import matplotlib.pyplot as plt
 
 class ANN:
 
-    def __init__(self, data, labels):
+    def __init__(self):
 
         self.k = 10
         self.gauss_mean = 0
         self.gauss_std = 0.01
         self.d = 3072
 
-
-        self.lamda = 0
-
+        self.lamda = 1
         self.batch_size = 100
-        self.epochs = 100
+        self.epochs = 40
         self.lr = 0.001
 
         self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d))
         self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1))
 
-    def minibatch_gd(self, x_train, y_train, x_val, y_val):
+    def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
+
         num_batches = int(x_train.shape[1] / self.batch_size)
 
-        cost_hist = []
-        acc_hist = []
+        train_cost_hist = []
+        train_acc_hist = []
+        val_cost_hist = []
+        val_acc_hist = []
 
         for i in range(self.epochs):
-            for j in range(num_batches):
+            rand = np.random.permutation(num_batches)
+
+            for j in rand:
                 j_start = j * num_batches
                 j_end = j_start + self.batch_size
 
@@ -45,15 +48,54 @@ class ANN:
                 self.w -= self.lr * grad_w
                 self.b -= self.lr * grad_b
 
-            acc_hist.append(self.compute_accuracy(x_batch, y_batch))
-            cost_hist.append(self.compute_cost(x_batch, y_batch))
+            train_cost = self.compute_cost(x_train, y_train)
+            train_acc = self.compute_accuracy(x_train, y_train)
+            val_cost = self.compute_cost(x_val, y_val)
+            val_acc = self.compute_accuracy(x_val, y_val)
 
-        plt.plot(acc_hist)
+            train_cost_hist.append(train_cost)
+            train_acc_hist.append(train_acc)
+            val_cost_hist.append(val_cost)
+            val_acc_hist.append(val_acc)
+
+            print("Epoch ", str(i+1), " training loss: ", str(self.compute_cost(x_train, y_train)))
+
+        print("TRAINING FINISHED")
+        print("Test accuracy: ", self.compute_accuracy(x_test, y_test))
+
+        self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
+
+    def plot_graphs(self, train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist):
+
+        plt.title('accuracy evolution')
+        plt.xlabel('epochs')
+        plt.ylabel('accuracy')
+        plt.plot(train_acc_hist, label='train')
+        plt.plot(val_acc_hist, label='val')
         plt.show()
-        plt.plot(cost_hist)
+
+        plt.title('cost evolution')
+        plt.xlabel('epochs')
+        plt.ylabel('cost')
+        plt.plot(train_cost_hist, label='train')
+        plt.plot(val_cost_hist, label='val')
         plt.show()
 
+        self.montage()
 
+    def montage(self):
+        """ Display the image for each label in W """
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(2,5)
+        for i in range(2):
+            for j in range(5):
+                im  = self.w[i*5+j,:].reshape(32,32,3, order='F')
+                sim = (im-np.min(im[:]))/(np.max(im[:])-np.min(im[:]))
+                sim = sim.transpose(1,0,2)
+                ax[i][j].imshow(sim, interpolation='nearest')
+                ax[i][j].set_title("y="+str(5*i+j))
+                ax[i][j].axis('off')
+        plt.show()
 
     def softmax(self, x):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -119,6 +161,7 @@ class ANN:
         print(grad_w_num)
         print(grad_w - grad_w_num)
 
+        print("Squared Error: ", np.sum(grad_w - grad_w_num) ** 2)
 
     def ComputeGradsNum(self, X, W, b, lamda, Y, P, h):
 
