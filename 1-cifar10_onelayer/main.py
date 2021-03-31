@@ -7,13 +7,8 @@ import random
 
 def main():
     path = 'cifar-10-batches-py'
-    train_fpath = os.path.join('../', path, 'data_batch_1')
-    val_fpath = os.path.join('../', path, 'data_batch_2')
-    test_fpath = os.path.join('../', path, 'test_batch')
 
-    x_train, y_train = load_batch(train_fpath)
-    x_val, y_val = load_batch(val_fpath)
-    x_test, y_test = load_batch(test_fpath)
+    x_train, y_train, x_val, y_val, x_test, y_test = load_all(path)
 
     mean, std = x_train.mean(axis=0), x_train.std(axis=0)
 
@@ -30,6 +25,39 @@ def main():
 
     ann = ANN()
     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
+
+def load_subset(path):
+
+    train_fpath = os.path.join('../', path, 'data_batch_1')
+    val_fpath = os.path.join('../', path, 'data_batch_2')
+    test_fpath = os.path.join('../', path, 'test_batch')
+
+    x_train, y_train = load_batch(train_fpath)
+    x_val, y_val = load_batch(val_fpath)
+    x_test, y_test = load_batch(test_fpath)
+
+    return x_train, y_train, x_val, y_val, x_test, y_test
+
+def load_all(path):
+
+    fpath = os.path.join('../', path, 'data_batch_' + str(1))
+    x_train, y_train = load_batch(fpath)
+    
+    for i in range(2, 6):
+        fpath = os.path.join('../', path, 'data_batch_' + str(i))
+        x, y = load_batch(fpath)
+        x_train = np.append(x_train, x, axis=0)
+        y_train = np.append(y_train, y, axis=0)
+
+    x_val = x_train[-1000:,:]
+    y_val = y_train[-1000:,:]
+    x_train = x_train[:-1000,:]
+    y_train = y_train[:-1000,:]
+
+    test_fpath = os.path.join('../', path, 'test_batch')
+    x_test, y_test = load_batch(test_fpath)
+
+    return x_train, y_train, x_val, y_val, x_test, y_test
 
 def load_batch(fpath, label_key='labels'):
     """

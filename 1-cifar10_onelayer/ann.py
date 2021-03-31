@@ -14,13 +14,22 @@ class ANN:
         self.gauss_std = 0.01
         self.d = 3072
 
-        self.lamda = 1
-        self.batch_size = 100
+        self.lamda = 0.1
+        self.batch_size = 10
         self.epochs = 40
         self.lr = 0.001
 
-        self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d))
-        self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1))
+        self.decay = 0.9
+
+        self.init_weights_and_biases(xavier=True)
+
+    def init_weights_and_biases(self, xavier):
+        if xavier:
+            self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d)) / np.sqrt(self.k * self.d)
+            self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1)) / np.sqrt(self.k)
+        else:
+            self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d))
+            self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1))
 
     def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
 
@@ -35,7 +44,7 @@ class ANN:
             rand = np.random.permutation(num_batches)
 
             for j in rand:
-                j_start = j * num_batches
+                j_start = j * self.batch_size
                 j_end = j_start + self.batch_size
 
                 x_batch = x_train[:, j_start:j_end]
@@ -48,6 +57,8 @@ class ANN:
                 self.w -= self.lr * grad_w
                 self.b -= self.lr * grad_b
 
+            self.lr *= self.decay
+
             train_cost = self.compute_cost(x_train, y_train)
             train_acc = self.compute_accuracy(x_train, y_train)
             val_cost = self.compute_cost(x_val, y_val)
@@ -58,7 +69,7 @@ class ANN:
             val_cost_hist.append(val_cost)
             val_acc_hist.append(val_acc)
 
-            print("Epoch ", str(i+1), " training loss: ", str(self.compute_cost(x_train, y_train)))
+            print("Epoch ", str(i+1), " val loss: ", str(self.compute_cost(x_val, y_val)))
 
         print("TRAINING FINISHED")
         print("Test accuracy: ", self.compute_accuracy(x_test, y_test))
@@ -147,6 +158,25 @@ class ANN:
         grad_b = 1/size * np.sum(g_batch, axis=1).reshape(-1,1)
 
         return grad_w, grad_b
+
+    def svm_loss(self, y_true, y_pred):
+        # max(0, 1-v)
+        v = 1 - np.sum(y_true * y_pred, axis=0)
+        return v.clip(min=0)
+
+    def compute_svm_cost(self, X, y_true):
+        y_pred = self.evaluate_classifier(X)
+        return self.svm_loss(y_true, y_pred)
+
+    def compute_svm_gradients(self, X, y_true, y_pred):
+
+        
+
+        v = 1 - np.sum(y_true * y_pred, axis=0)
+
+        return None
+
+
 
     def check_gradients(self, X, y_true):
 
