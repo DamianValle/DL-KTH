@@ -14,19 +14,20 @@ class ANN:
         self.gauss_std = 0.01
         self.d = 3072
 
-        self.lamda = 0.1
-        self.batch_size = 10
+        self.lamda = 0
+        self.batch_size = 100
         self.epochs = 40
         self.lr = 0.001
+        self.loss = "svm" # "svm" eller "cross entropy"
 
         self.decay = 0.9
 
-        self.init_weights_and_biases(xavier=True)
+        self.init_weights_and_biases(xavier=False)
 
     def init_weights_and_biases(self, xavier):
         if xavier:
-            self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d)) / np.sqrt(self.k * self.d)
-            self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1)) / np.sqrt(self.k)
+            self.w = np.random.normal(self.gauss_mean, 1/np.sqrt(self.k * self.d), (self.k, self.d))
+            self.b = np.random.normal(self.gauss_mean, np.sqrt(self.k), (self.k, 1))
         else:
             self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d))
             self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1))
@@ -50,18 +51,16 @@ class ANN:
                 x_batch = x_train[:, j_start:j_end]
                 y_batch = y_train[:, j_start:j_end]
 
-                y_batch_pred = self.evaluate_classifier(x_batch)
-
-                grad_w, grad_b = self.compute_gradients(x_batch, y_batch, y_batch_pred)
+                grad_w, grad_b = self.compute_gradients(x_batch, y_batch, loss=self.loss)
 
                 self.w -= self.lr * grad_w
                 self.b -= self.lr * grad_b
 
             self.lr *= self.decay
 
-            train_cost = self.compute_cost(x_train, y_train)
+            train_cost = self.compute_cost(x_train, y_train, loss=self.loss)
             train_acc = self.compute_accuracy(x_train, y_train)
-            val_cost = self.compute_cost(x_val, y_val)
+            val_cost = self.compute_cost(x_val, y_val, loss=self.loss)
             val_acc = self.compute_accuracy(x_val, y_val)
 
             train_cost_hist.append(train_cost)
@@ -69,7 +68,7 @@ class ANN:
             val_cost_hist.append(val_cost)
             val_acc_hist.append(val_acc)
 
-            print("Epoch ", str(i+1), " val loss: ", str(self.compute_cost(x_val, y_val)))
+            print("Epoch ", str(i+1), " val acc: ", str(self.compute_accuracy(x_val, y_val)))
 
         print("TRAINING FINISHED")
         print("Test accuracy: ", self.compute_accuracy(x_test, y_test))
@@ -122,11 +121,23 @@ class ANN:
 
         return self.softmax(np.dot(self.w, X) + self.b)
 
-    def compute_cost(self, X, y_true):
+    def compute_cost(self, X, y_true, loss="cross entropy"):
 
-        y_pred = self.evaluate_classifier(X)
+        if loss == "cross entropy":
+            y_pred = self.evaluate_classifier(X)
+            return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * np.sum( self.w ** 2 )
 
-        return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * np.sum( self.w ** 2 )
+        elif loss == "svm":
+            size = y_true.shape[1]
+            s_j = self.w @ X + self.b
+
+            s_y = np.empty(size)
+            for i in range(size):
+                s_y[i] = s_j[:, i] @ y_true[:, i]
+
+            loss = s_j - s_y + 1
+
+            return np.mean(loss)
 
     def cross_entropy(self, y_true, y_pred):
         
@@ -143,55 +154,62 @@ class ANN:
         y_true, y_pred: k x n
         """
 
-        y_pred = self.evaluate_classifier(X)
+        y_pred = np.dot(self.w, X) + self.b
         match = len(np.where(np.argmax(y_true, axis=0) == np.argmax(y_pred, axis=0))[0])
 
         return match/y_true.shape[1]
 
-    def compute_gradients(self, X, y_true, y_pred):
+    def compute_gradients(self, X, y_true, loss="cross entropy"):
+        """
+        X:      d x batch_size
+        y_true: k x batch_size
+        """
 
         size = y_true.shape[1]
 
-        g_batch = y_pred - y_true
+        if loss == "cross entropy":
+            y_pred = self.evaluate_classifier(X)
+            g_batch = y_pred - y_true
 
-        grad_w = 1/size * np.dot(g_batch, X.T) + 2 * self.lamda * self.w
-        grad_b = 1/size * np.sum(g_batch, axis=1).reshape(-1,1)
+            grad_w = np.dot(g_batch, X.T) / size + 2 * self.lamda * self.w
+            grad_b = np.sum(g_batch, axis=1).reshape(-1,1) / size
 
-        return grad_w, grad_b
+            return grad_w, grad_b
 
-    def svm_loss(self, y_true, y_pred):
-        # max(0, 1-v)
-        v = 1 - np.sum(y_true * y_pred, axis=0)
-        return v.clip(min=0)
+        elif loss == "svm":
+            s_j = np.dot(self.w, X) + self.b
 
-    def compute_svm_cost(self, X, y_true):
-        y_pred = self.evaluate_classifier(X)
-        return self.svm_loss(y_true, y_pred)
+            s_y = np.empty(size)
+            for i in range(size):
+                s_y[i] = np.dot(s_j[:, i], y_true[:, i])
 
-    def compute_svm_gradients(self, X, y_true, y_pred):
+            loss = s_j - s_y + 1
+            loss = np.where(loss > 0, 1, 0)
 
-        
+            loss_grad_w = np.zeros_like(self.w)
+            loss_grad_b = np.empty(self.k)
 
-        v = 1 - np.sum(y_true * y_pred, axis=0)
+            for i in range(size):
+                loss_grad_w += np.outer(loss[:, i], X[:, i]) - np.outer(y_true[:, i], X[:, i] * np.sum(loss[:, i]))
+                loss_grad_b += np.where(loss[:, i] == 0, 0, 1) - (np.where(y_true[:, i] == 0, 0, 1) * np.sum(loss[:, i]))
 
-        return None
+            grad_w = loss_grad_w / size + 2 * self.lamda * self.w
+            grad_b = loss_grad_b / size
 
+            return grad_w, np.reshape(grad_b, (10, 1))
 
+        else:
+            print("Wrong loss term specified.")
+            return None
 
     def check_gradients(self, X, y_true):
 
         y_pred = self.evaluate_classifier(X)
 
-        grad_w, grad_b = self.compute_gradients(X, y_true, y_pred)
+        grad_w, grad_b = self.compute_gradients(X, y_true)
         grad_w_num, grad_b_num = self.ComputeGradsNum(X, self.w, self.b, self.lamda, y_true, y_pred, 1e-6)
 
-        print("grad_w shape: ", grad_w.shape)
-        print("grad_w_num shape: ", grad_w_num.shape)
-        print(grad_w)
-        print(grad_w_num)
-        print(grad_w - grad_w_num)
-
-        print("Squared Error: ", np.sum(grad_w - grad_w_num) ** 2)
+        print("MSE: ", np.mean((grad_w - grad_w_num) ** 2))
 
     def ComputeGradsNum(self, X, W, b, lamda, Y, P, h):
 
