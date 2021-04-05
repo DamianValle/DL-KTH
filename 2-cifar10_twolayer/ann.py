@@ -14,16 +14,16 @@ class ANN:
         self.d = 3072
         self.num_hidden = 50
 
-        self.lamda = 4 * 1e-4
+        self.lamda = 8 * 1e-4
         self.batch_size = 100
-        self.epochs = 40
-        self.lr = 0.001
+        self.epochs = 400
+        self.lr = 1e-5
         self.xavier = True
 
         self.lr_min = 1e-5
         self.lr_max = 1e-1
         self.ns = -1
-        self.num_cycles = 10
+        self.num_cycles = 8
 
         self.plot = True
 
@@ -123,22 +123,6 @@ class ANN:
         plt.plot(train_cost_hist, label='train')
         plt.plot(val_cost_hist, label='val')
         plt.legend()
-        plt.show()
-
-        self.montage()
-
-    def montage(self):
-        """ Display the image for each label in W """
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(2,5)
-        for i in range(2):
-            for j in range(5):
-                im  = self.w1[i*5+j,:].reshape(32,32,3, order='F')
-                sim = (im-np.min(im[:]))/(np.max(im[:])-np.min(im[:]))
-                sim = sim.transpose(1,0,2)
-                ax[i][j].imshow(sim, interpolation='nearest')
-                ax[i][j].set_title("y="+str(5*i+j))
-                ax[i][j].axis('off')
         plt.show()
 
     def softmax(self, x):
