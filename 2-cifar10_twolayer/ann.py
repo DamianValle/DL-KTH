@@ -13,41 +13,47 @@ class ANN:
         self.gauss_mean = 0
         self.gauss_std = 0.01
         self.d = 3072
-        self.h = 50
+        self.num_hidden = 50
 
-        self.lamda = 0.1
-        self.batch_size = 16
+        self.lamda = 0.01
+        self.batch_size = 100
         self.epochs = 80
         self.lr = 0.001
 
-        self.lr_min = 0.001
-        self.lr_max = 0.1
-        self.ns = -1
+        self.lr_min = 1e-5
+        self.lr_max = 1e-1
+        self.ns = 500
 
         self.decay = 0.9
 
         self.init_weights_and_biases()
 
     def init_weights_and_biases(self):
-        self.w1 = np.random.normal(self.gauss_mean, self.gauss_std, (self.h, self.d))
-        self.w2 = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.h))
-        self.b1 = np.zeros((self.h, 1))
+        self.w1 = np.random.normal(self.gauss_mean, self.gauss_std, (self.num_hidden, self.d))
+        self.w2 = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.num_hidden))
+        self.b1 = np.zeros((self.num_hidden, 1))
         self.b2 = np.zeros((self.k, 1))
 
     def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
 
         num_batches = int(x_train.shape[1] / self.batch_size)
-        self.ns = num_batches * 4
 
         train_cost_hist = []
         train_acc_hist = []
         val_cost_hist = []
         val_acc_hist = []
 
+        t = 0
+        done = False
         for i in range(self.epochs):
             rand = np.random.permutation(num_batches)
 
             for j in rand:
+                t += 1
+                if t == self.ns * 2:
+                    done = True
+                    break
+
                 j_start = j * self.batch_size
                 j_end = j_start + self.batch_size
 
@@ -61,7 +67,10 @@ class ANN:
                 self.w2 -= self.lr * grad_w2
                 self.b2 -= self.lr * grad_b2
 
-            self.lr *= self.decay
+            if done:
+                break
+
+            self.lr = self.cyclical_lr(t)
 
             train_cost = self.compute_cost(x_train, y_train)
             train_acc = self.compute_accuracy(x_train, y_train)
@@ -80,6 +89,18 @@ class ANN:
 
         self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
 
+    def cyclical_lr(self, t):
+
+        l = int(t / (2*self.ns))
+
+        if t < (2*l + 1) * self.ns:
+            lr = self.lr_min + (self.lr_max - self.lr_min) * (( t - 2*l * self.ns) / self.ns)
+        else:
+            lr = self.lr_max - (self.lr_max - self.lr_min) * (( t - (2*l + 1) * self.ns ) / self.ns)
+
+        return lr
+
+
     def plot_graphs(self, train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist):
 
         plt.title('accuracy evolution')
@@ -96,7 +117,7 @@ class ANN:
         plt.plot(val_cost_hist, label='val')
         plt.show()
 
-        self.montage()
+        #self.montage()
 
     def montage(self):
         """ Display the image for each label in W """
