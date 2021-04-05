@@ -1,0 +1,114 @@
+Training network for lambda = 1e-05
+Epoch  1  val acc:  0.2178
+Epoch  2  val acc:  0.4268
+Epoch  3  val acc:  0.4382
+TRAINING FINISHED
+Test accuracy:  0.479
+Training network for lambda = 3.727593720314938e-05
+Epoch  1  val acc:  0.2042
+Epoch  2  val acc:  0.421
+Epoch  3  val acc:  0.4078
+TRAINING FINISHED
+Test accuracy:  0.4799
+Training network for lambda = 0.00013894954943731373
+Epoch  1  val acc:  0.2054
+Epoch  2  val acc:  0.4314
+Epoch  3  val acc:  0.4076
+TRAINING FINISHED
+Test accuracy:  0.4801
+Training network for lambda = 0.0005179474679231213
+Epoch  1  val acc:  0.2074
+Epoch  2  val acc:  0.4312
+Epoch  3  val acc:  0.455
+TRAINING FINISHED
+Test accuracy:  0.4793
+
+Training network for lambda = 0.0019306977288832496
+Epoch  1  val acc:  0.1954
+Epoch  2  val acc:  0.4292
+Epoch  3  val acc:  0.4428
+TRAINING FINISHED
+Test accuracy:  0.474
+
+Training network for lambda = 0.007196856730011514
+Epoch  1  val acc:  0.2256
+Epoch  2  val acc:  0.4254
+Epoch  3  val acc:  0.3996
+TRAINING FINISHED
+Test accuracy:  0.4774
+
+Training network for lambda = 0.026826957952797246
+Epoch  1  val acc:  0.2204
+Epoch  2  val acc:  0.3978
+Epoch  3  val acc:  0.4068
+TRAINING FINISHED
+Test accuracy:  0.4422
+
+Training network for lambda = 0.1
+Epoch  1  val acc:  0.225
+Epoch  2  val acc:  0.3642
+Epoch  3  val acc:  0.3544
+TRAINING FINISHED
+Test accuracy:  0.3683
+
+========================================================
+
+Training network for lambda = 0.0001
+Epoch  1  val acc:  0.209
+Epoch  2  val acc:  0.4262
+Epoch  3  val acc:  0.4558
+TRAINING FINISHED
+Test accuracy:  0.4865
+
+Training network for lambda = 0.00013894954943731373
+Epoch  1  val acc:  0.2108
+Epoch  2  val acc:  0.434
+Epoch  3  val acc:  0.4532
+TRAINING FINISHED
+Test accuracy:  0.4671
+
+Training network for lambda = 0.00019306977288832496
+Epoch  1  val acc:  0.1954
+Epoch  2  val acc:  0.4396
+Epoch  3  val acc:  0.4414
+TRAINING FINISHED
+Test accuracy:  0.4656
+
+Training network for lambda = 0.00026826957952797245
+Epoch  1  val acc:  0.1938
+Epoch  2  val acc:  0.4344
+Epoch  3  val acc:  0.4532
+TRAINING FINISHED
+Test accuracy:  0.482
+
+Training network for lambda = 0.0003727593720314938
+Epoch  1  val acc:  0.2168
+Epoch  2  val acc:  0.429
+Epoch  3  val acc:  0.4482
+TRAINING FINISHED
+Test accuracy:  0.488
+
+Training network for lambda = 0.0005179474679231213
+Epoch  1  val acc:  0.2148
+Epoch  2  val acc:  0.4316
+Epoch  3  val acc:  0.4344
+TRAINING FINISHED
+Test accuracy:  0.4832
+
+Training network for lambda = 0.0007196856730011522
+Epoch  1  val acc:  0.1978
+Epoch  2  val acc:  0.42
+Epoch  3  val acc:  0.4334
+TRAINING FINISHED
+Test accuracy:  0.4756
+
+Training network for lambda = 0.001
+Epoch  1  val acc:  0.2274
+Epoch  2  val acc:  0.422
+Epoch  3  val acc:  0.4424
+TRAINING FINISHED
+Test accuracy:  0.4771
+
+========================================================
+
+Selected parameter: lambda = 0.0004

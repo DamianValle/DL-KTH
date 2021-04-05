@@ -8,7 +8,7 @@ import random
 def main():
     path = 'cifar-10-batches-py'
 
-    x_train, y_train, x_val, y_val, x_test, y_test = load_subset(path)
+    x_train, y_train, x_val, y_val, x_test, y_test = load_all(path)
 
     mean, std = x_train.mean(axis=0), x_train.std(axis=0)
 
@@ -26,6 +26,12 @@ def main():
     ann = ANN()
     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
 
+    # Lambda optimization search
+    # for lamda in np.power(10, np.linspace(-5, -1, 8)):
+    #     print("\nTraining network for lambda =", str(lamda))
+    #     ann = ANN(lamda)
+    #     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
+
 def load_subset(path):
 
     train_fpath = os.path.join('../', path, 'data_batch_1')
@@ -40,6 +46,8 @@ def load_subset(path):
 
 def load_all(path):
 
+    val_size = 5000
+
     fpath = os.path.join('../', path, 'data_batch_' + str(1))
     x_train, y_train = load_batch(fpath)
     
@@ -49,10 +57,10 @@ def load_all(path):
         x_train = np.append(x_train, x, axis=0)
         y_train = np.append(y_train, y, axis=0)
 
-    x_val = x_train[-1000:,:]
-    y_val = y_train[-1000:,:]
-    x_train = x_train[:-1000,:]
-    y_train = y_train[:-1000,:]
+    x_val = x_train[-val_size:,:]
+    y_val = y_train[-val_size:,:]
+    x_train = x_train[:-val_size,:]
+    y_train = y_train[:-val_size,:]
 
     test_fpath = os.path.join('../', path, 'test_batch')
     x_test, y_test = load_batch(test_fpath)

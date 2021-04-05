@@ -8,35 +8,41 @@ import matplotlib.pyplot as plt
 class ANN:
 
     def __init__(self):
-
         self.k = 10
         self.gauss_mean = 0
         self.gauss_std = 0.01
         self.d = 3072
         self.num_hidden = 50
 
-        self.lamda = 0.01
+        self.lamda = 4 * 1e-4
         self.batch_size = 100
-        self.epochs = 80
+        self.epochs = 40
         self.lr = 0.001
+        self.xavier = True
 
         self.lr_min = 1e-5
         self.lr_max = 1e-1
-        self.ns = 500
+        self.ns = -1
+        self.num_cycles = 10
 
-        self.decay = 0.9
+        self.plot = True
 
         self.init_weights_and_biases()
 
     def init_weights_and_biases(self):
-        self.w1 = np.random.normal(self.gauss_mean, self.gauss_std, (self.num_hidden, self.d))
-        self.w2 = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.num_hidden))
+        if self.xavier:
+            self.w1 = np.random.normal(self.gauss_mean, 1 / np.sqrt(self.d), (self.num_hidden, self.d))
+            self.w2 = np.random.normal(self.gauss_mean, 1 / np.sqrt(self.num_hidden), (self.k, self.num_hidden))
+        else:
+            self.w1 = np.random.normal(self.gauss_mean, self.gauss_std, (self.num_hidden, self.d))
+            self.w2 = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.num_hidden))
+
         self.b1 = np.zeros((self.num_hidden, 1))
         self.b2 = np.zeros((self.k, 1))
 
     def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
-
         num_batches = int(x_train.shape[1] / self.batch_size)
+        self.ns = 10 * num_batches
 
         train_cost_hist = []
         train_acc_hist = []
@@ -49,11 +55,6 @@ class ANN:
             rand = np.random.permutation(num_batches)
 
             for j in rand:
-                t += 1
-                if t == self.ns * 2:
-                    done = True
-                    break
-
                 j_start = j * self.batch_size
                 j_end = j_start + self.batch_size
 
@@ -66,6 +67,11 @@ class ANN:
                 self.b1 -= self.lr * grad_b1
                 self.w2 -= self.lr * grad_w2
                 self.b2 -= self.lr * grad_b2
+
+                t += 1
+                if t == self.ns * self.num_cycles:
+                    done = True
+                    break
 
             if done:
                 break
@@ -87,7 +93,8 @@ class ANN:
         print("TRAINING FINISHED")
         print("Test accuracy: ", self.compute_accuracy(x_test, y_test))
 
-        self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
+        if self.plot:
+            self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
 
     def cyclical_lr(self, t):
 
@@ -102,12 +109,12 @@ class ANN:
 
 
     def plot_graphs(self, train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist):
-
         plt.title('accuracy evolution')
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
         plt.plot(train_acc_hist, label='train')
         plt.plot(val_acc_hist, label='val')
+        plt.legend()
         plt.show()
 
         plt.title('cost evolution')
@@ -115,9 +122,10 @@ class ANN:
         plt.ylabel('cost')
         plt.plot(train_cost_hist, label='train')
         plt.plot(val_cost_hist, label='val')
+        plt.legend()
         plt.show()
 
-        #self.montage()
+        self.montage()
 
     def montage(self):
         """ Display the image for each label in W """
@@ -125,7 +133,7 @@ class ANN:
         fig, ax = plt.subplots(2,5)
         for i in range(2):
             for j in range(5):
-                im  = self.w[i*5+j,:].reshape(32,32,3, order='F')
+                im  = self.w1[i*5+j,:].reshape(32,32,3, order='F')
                 sim = (im-np.min(im[:]))/(np.max(im[:])-np.min(im[:]))
                 sim = sim.transpose(1,0,2)
                 ax[i][j].imshow(sim, interpolation='nearest')
@@ -152,14 +160,11 @@ class ANN:
         return p, h
 
     def compute_cost(self, X, y_true):
-
         y_pred, _ = self.evaluate_classifier(X)
 
         return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * (np.sum(self.w1 ** 2) + np.sum(self.w2 ** 2))
 
-
     def cross_entropy(self, y_true, y_pred):
-        
         conf = np.sum(y_true * y_pred, axis=0)
         c_entropy = np.sum(-np.log(conf), axis=0)
 
@@ -183,7 +188,6 @@ class ANN:
         X:      d x batch_size
         y_true: k x batch_size
         """
-
         size = y_true.shape[1]
 
         y_pred, h = self.evaluate_classifier(X)
@@ -199,54 +203,3 @@ class ANN:
         grad_b1 = np.sum(g_batch, axis=1).reshape(-1, 1) / size
 
         return grad_w1, grad_b1, grad_w2, grad_b2
-
-    def check_gradients(self, X, y_true):
-
-        y_pred = self.evaluate_classifier(X)
-
-        grad_w, grad_b = self.compute_gradients(X, y_true)
-        grad_w_num, grad_b_num = self.ComputeGradsNum(X, self.w, self.b, self.lamda, y_true, y_pred, 1e-6)
-
-        print("MSE: ", np.mean((grad_w - grad_w_num) ** 2))
-
-    def ComputeGradsNum(self, X, W, b, lamda, Y, P, h):
-
-        no 	= 	W.shape[0]
-        d 	= 	X.shape[0]
-
-        grad_W = np.zeros(W.shape)
-        grad_b = np.zeros((no, 1))
-
-        c = self.ComputeCost(X, Y, W, b, lamda)
-        
-        for i in range(len(b)):
-            b_try = np.array(b)
-            b_try[i] += h
-            c2 = self.ComputeCost(X, Y, W, b_try, lamda)
-            grad_b[i] = (c2-c) / h
-
-        for i in range(W.shape[0]):
-            for j in range(W.shape[1]):
-                W_try = np.array(W)
-                W_try[i,j] += h
-                c2 = self.ComputeCost(X, Y, W_try, b, lamda)
-                grad_W[i,j] = (c2-c) / h
-
-        return [grad_W, grad_b]
-
-    def EvaluateClassifier(self, X, W, b):
-        """
-        w: k x d
-        X: d x n
-        b: k x 1
-
-        output: n x k
-        """
-
-        return self.softmax(np.dot(W, X) + b)
-
-    def ComputeCost(self, X, y_true, W, b, lamda):
-
-        y_pred = self.EvaluateClassifier(X, W, b)
-
-        return self.cross_entropy(y_true, y_pred) / X.shape[1] + lamda * np.sum( W ** 2 )
