@@ -1,3 +1,7 @@
+"""
+Author: el puto Doppler co
+"""
+
 import numpy as np
 import os
 import sys
