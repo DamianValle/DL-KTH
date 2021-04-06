@@ -14,11 +14,11 @@ class ANN:
         self.gauss_std = 0.01
         self.d = 3072
 
-        self.lamda = 0
+        self.lamda = 0.1
         self.batch_size = 100
         self.epochs = 40
         self.lr = 0.001
-        self.loss = "svm" # "svm" eller "cross entropy"
+        self.loss = "cross entropy" # "svm" eller "cross entropy"
 
         self.decay = 0.9
 
@@ -26,8 +26,8 @@ class ANN:
 
     def init_weights_and_biases(self, xavier):
         if xavier:
-            self.w = np.random.normal(self.gauss_mean, 1/np.sqrt(self.k * self.d), (self.k, self.d))
-            self.b = np.random.normal(self.gauss_mean, np.sqrt(self.k), (self.k, 1))
+            self.w = np.random.normal(self.gauss_mean, 1/np.sqrt(self.d), (self.k, self.d))
+            self.b = np.random.normal(self.gauss_mean, 1/np.sqrt(self.d), (self.k, 1))
         else:
             self.w = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.d))
             self.b = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, 1))
@@ -36,8 +36,10 @@ class ANN:
 
         num_batches = int(x_train.shape[1] / self.batch_size)
 
+        train_loss_hist = []
         train_cost_hist = []
         train_acc_hist = []
+        val_loss_hist = []
         val_cost_hist = []
         val_acc_hist = []
 
@@ -58,13 +60,15 @@ class ANN:
 
             self.lr *= self.decay
 
-            train_cost = self.compute_cost(x_train, y_train, loss=self.loss)
+            train_loss, train_cost = self.compute_cost(x_train, y_train, loss=self.loss)
             train_acc = self.compute_accuracy(x_train, y_train)
-            val_cost = self.compute_cost(x_val, y_val, loss=self.loss)
+            val_loss, val_cost = self.compute_cost(x_val, y_val, loss=self.loss)
             val_acc = self.compute_accuracy(x_val, y_val)
 
+            train_loss_hist.append(train_loss)
             train_cost_hist.append(train_cost)
             train_acc_hist.append(train_acc)
+            val_loss_hist.append(val_loss)
             val_cost_hist.append(val_cost)
             val_acc_hist.append(val_acc)
 
@@ -73,28 +77,40 @@ class ANN:
         print("TRAINING FINISHED")
         print("Test accuracy: ", self.compute_accuracy(x_test, y_test))
 
-        self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
+        self.plot_graphs(train_acc_hist, train_loss_hist, train_cost_hist, val_acc_hist, val_loss_hist, val_cost_hist)
 
-    def plot_graphs(self, train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist):
+    def plot_graphs(self, train_acc_hist, train_loss_hist, train_cost_hist, val_acc_hist, val_loss_hist, val_cost_hist):
 
-        plt.title('accuracy evolution')
+        plt.title('Accuracy evolution')
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
         plt.plot(train_acc_hist, label='train')
         plt.plot(val_acc_hist, label='val')
+        plt.legend()
         plt.show()
 
-        plt.title('cost evolution')
+        plt.title('Loss evolution')
+        plt.xlabel('epochs')
+        plt.ylabel('cost')
+        plt.plot(train_loss_hist, label='train')
+        plt.plot(val_loss_hist, label='val')
+        plt.legend()
+        plt.show()
+
+        plt.title('Cost evolution')
         plt.xlabel('epochs')
         plt.ylabel('cost')
         plt.plot(train_cost_hist, label='train')
         plt.plot(val_cost_hist, label='val')
+        plt.legend()
         plt.show()
 
         self.montage()
 
     def montage(self):
-        """ Display the image for each label in W """
+        """ 
+        Display the image for each label in W 
+        """
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(2,5)
         for i in range(2):
@@ -121,24 +137,6 @@ class ANN:
 
         return self.softmax(np.dot(self.w, X) + self.b)
 
-    def compute_cost(self, X, y_true, loss="cross entropy"):
-
-        if loss == "cross entropy":
-            y_pred = self.evaluate_classifier(X)
-            return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * np.sum( self.w ** 2 )
-
-        elif loss == "svm":
-            size = y_true.shape[1]
-            s_j = self.w @ X + self.b
-
-            s_y = np.empty(size)
-            for i in range(size):
-                s_y[i] = s_j[:, i] @ y_true[:, i]
-
-            loss = s_j - s_y + 1
-
-            return np.mean(loss)
-
     def cross_entropy(self, y_true, y_pred):
         
         conf = np.sum(y_true * y_pred, axis=0)
@@ -158,6 +156,28 @@ class ANN:
         match = len(np.where(np.argmax(y_true, axis=0) == np.argmax(y_pred, axis=0))[0])
 
         return match/y_true.shape[1]
+
+    def compute_cost(self, X, y_true, loss="cross entropy"):
+
+        if loss == "cross entropy":
+            y_pred = self.evaluate_classifier(X)
+            loss = self.cross_entropy(y_true, y_pred) / X.shape[1]
+            cost = loss + self.lamda * np.sum( self.w ** 2 )
+
+            return loss, cost
+
+        elif loss == "svm":
+            size = y_true.shape[1]
+            s_j = self.w @ X + self.b
+
+            s_y = np.empty(size)
+            for i in range(size):
+                s_y[i] = s_j[:, i] @ y_true[:, i]
+
+            loss = np.mean(s_j - s_y + 1)
+            cost = loss + self.lamda * np.sum( self.w ** 2 ) 
+
+            return loss, cost
 
     def compute_gradients(self, X, y_true, loss="cross entropy"):
         """
