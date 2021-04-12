@@ -8,7 +8,7 @@ import random
 def main():
     path = 'cifar-10-batches-py'
 
-    x_train, y_train, x_val, y_val, x_test, y_test = load_all(path)
+    x_train, y_train, x_val, y_val, x_test, y_test = load_subset(path)
 
     mean, std = x_train.mean(axis=0), x_train.std(axis=0)
 

@@ -26,6 +26,7 @@ class ANN:
         self.num_cycles = 8
 
         self.plot = True
+        self.gradient_check = False
 
         self.init_weights_and_biases()
 
@@ -60,6 +61,9 @@ class ANN:
 
                 x_batch = x_train[:, j_start:j_end]
                 y_batch = y_train[:, j_start:j_end]
+
+                if self.gradient_check:
+                    self.check_gradients(x_batch, y_batch)
 
                 grad_w1, grad_b1, grad_w2, grad_b2 = self.compute_gradients(x_batch, y_batch)
 
@@ -187,3 +191,122 @@ class ANN:
         grad_b1 = np.sum(g_batch, axis=1).reshape(-1, 1) / size
 
         return grad_w1, grad_b1, grad_w2, grad_b2
+
+    def check_gradients(self, X, y_true):
+
+        grad_w1, grad_b1, grad_w2, grad_b2 = self.compute_gradients(X, y_true)
+        grad_w1_num, grad_b1_num, grad_w2_num, grad_b2_num = self.ComputeGradsNum(X, y_true, self.w1, self.w2, self.b1, self.b2, self.lamda, 1e-6)
+
+        mean_re = np.mean(abs(grad_w1 - grad_w1_num) / np.maximum(abs(grad_w1) + abs(grad_w1_num), np.finfo(float).eps))
+
+        print("Mean Squared Error:\t{:.2e}".format(np.mean((grad_w1 - grad_w1_num) ** 2)))
+        print("Mean Relative Error:\t{:.2e}".format(mean_re))
+
+    def EvaluateClassifier(self, X, W1, W2, b1, b2):
+
+        s1 = np.dot(W1, X) + b1
+        h = np.maximum(0, s1)
+        s2 = np.dot(W2, h) + b2
+        p = self.softmax(s2)
+
+        return p
+
+    def ComputeCost(self, X, Y, W1, W2, b1, b2, lam):
+
+        y_pred = self.EvaluateClassifier(X, W1, W2, b1, b2)
+
+        return self.cross_entropy(Y, y_pred) / X.shape[1] + lam * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
+
+    def ComputeGradsNum(self, X, Y, W1, W2, b1, b2, lam, h):
+
+        grad_W1 = np.zeros(W1.shape)
+        grad_b1 = np.zeros(b1.shape)
+        grad_W2 = np.zeros(W2.shape)
+        grad_b2 = np.zeros(b2.shape)
+
+        c = self.ComputeCost(X, Y, W1, W2, b1, b2, lam)
+        
+        for i in range(len(b1)):
+            b1_try = np.array(b1)
+            b1_try[i] += h
+            c2 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
+            grad_b1[i] = (c2 - c) / h
+
+        for i in range(W1.shape[0]):
+            for j in range(W1.shape[1]):
+                W1_try = np.array(W1)
+                W1_try[i,j] += h
+                c2 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
+                grad_W1[i,j] = (c2 - c) / h
+                
+        for i in range(len(b2)):
+            b2_try = np.array(b2)
+            b2_try[i] += h
+            c2 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
+            grad_b2[i] = (c2 - c) / h
+
+        for i in range(W2.shape[0]):
+            for j in range(W2.shape[1]):
+                W2_try = np.array(W2)
+                W2_try[i,j] += h
+                c2 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
+                grad_W2[i,j] = (c2 - c) / h
+
+        return grad_W1, grad_b1, grad_W2, grad_b2
+
+    def ComputeGradsNumSlow(self, X, Y, W1, W2, b1, b2, lam, h):
+
+        P, _ = self.evaluate_classifier(X)
+        
+        grad_W1 = np.zeros(W1.shape)
+        grad_b1 = np.zeros(b1.shape)
+        grad_W2 = np.zeros(W2.shape)
+        grad_b2 = np.zeros(b2.shape)
+        
+        for i in range(len(b1)):
+            b1_try = np.array(b1)
+            b1_try[i] -= h
+            c1 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
+
+            b1_try = np.array(b1)
+            b1_try[i] += h
+            c2 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
+
+            grad_b1[i] = (c2 - c1) / (2 * h)
+
+        for i in range(W1.shape[0]):
+            for j in range(W1.shape[1]):
+                W1_try = np.array(W1)
+                W1_try[i,j] -= h
+                c1 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
+
+                W1_try = np.array(W1)
+                W1_try[i,j] += h
+                c2 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
+
+                grad_W1[i,j] = (c2 - c1) / (2 * h)
+                
+        for i in range(len(b2)):
+            b2_try = np.array(b2)
+            b2_try[i] -= h
+            c1 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
+
+            b2_try = np.array(b2)
+            b2_try[i] += h
+            c2 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
+
+            grad_b2[i] = (c2 - c1) / (2 * h)
+
+        for i in range(W2.shape[0]):
+            for j in range(W2.shape[1]):
+                W2_try = np.array(W2)
+                W2_try[i,j] -= h
+                c1 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
+
+                W2_try = np.array(W2)
+                W2_try[i,j] += h
+                c2 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
+
+                grad_W2[i,j] = (c2 - c1) / (2 * h)
+
+        return [grad_W1, grad_W2, grad_b1, grad_b2]
