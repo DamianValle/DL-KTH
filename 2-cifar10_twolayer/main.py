@@ -1,3 +1,7 @@
+"""
+Author: el puto Doppler co
+"""
+
 import numpy as np
 import os
 import sys
@@ -8,7 +12,7 @@ import random
 def main():
     path = 'cifar-10-batches-py'
 
-    x_train, y_train, x_val, y_val, x_test, y_test = load_subset(path)
+    x_train, y_train, x_val, y_val, x_test, y_test = load_all(path)
 
     mean, std = x_train.mean(axis=0), x_train.std(axis=0)
 
@@ -33,7 +37,6 @@ def main():
     #     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
 
 def load_subset(path):
-
     train_fpath = os.path.join('../', path, 'data_batch_1')
     val_fpath = os.path.join('../', path, 'data_batch_2')
     test_fpath = os.path.join('../', path, 'test_batch')
@@ -45,7 +48,6 @@ def load_subset(path):
     return x_train, y_train, x_val, y_val, x_test, y_test
 
 def load_all(path):
-
     val_size = 5000
 
     fpath = os.path.join('../', path, 'data_batch_' + str(1))

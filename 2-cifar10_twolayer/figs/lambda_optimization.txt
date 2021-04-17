@@ -1,4 +1,4 @@
-Training network for lambda = 1e-05
+ Training network for lambda = 1e-05
 Epoch  1  val acc:  0.2178
 Epoch  2  val acc:  0.4268
 Epoch  3  val acc:  0.4382

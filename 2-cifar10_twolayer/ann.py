@@ -12,21 +12,22 @@ class ANN:
         self.gauss_mean = 0
         self.gauss_std = 0.01
         self.d = 3072
-        self.num_hidden = 50
+        self.num_hidden = 512
 
-        self.lamda = 8 * 1e-4
+        self.lamda = 6 * 1e-4
         self.batch_size = 100
-        self.epochs = 400
+        self.epochs = 300
         self.lr = 1e-5
         self.xavier = True
+        self.jitter = True
+        self.dropout = 0.25
 
         self.lr_min = 1e-5
-        self.lr_max = 1e-1
+        self.lr_max = 2e-2
         self.ns = -1
-        self.num_cycles = 8
+        self.num_cycles = 6
 
         self.plot = True
-        self.gradient_check = False
 
         self.init_weights_and_biases()
 
@@ -49,6 +50,8 @@ class ANN:
         train_acc_hist = []
         val_cost_hist = []
         val_acc_hist = []
+        lr_vs_acc = []
+        lr = []
 
         t = 0
         done = False
@@ -62,8 +65,8 @@ class ANN:
                 x_batch = x_train[:, j_start:j_end]
                 y_batch = y_train[:, j_start:j_end]
 
-                if self.gradient_check:
-                    self.check_gradients(x_batch, y_batch)
+                if self.jitter:
+                    x_batch += 0.01 * np.random.randn(*x_batch.shape)
 
                 grad_w1, grad_b1, grad_w2, grad_b2 = self.compute_gradients(x_batch, y_batch)
 
@@ -73,7 +76,7 @@ class ANN:
                 self.b2 -= self.lr * grad_b2
 
                 t += 1
-                if t == self.ns * self.num_cycles:
+                if t == self.ns * self.num_cycles + 1:
                     done = True
                     break
 
@@ -101,7 +104,6 @@ class ANN:
             self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
 
     def cyclical_lr(self, t):
-
         l = int(t / (2*self.ns))
 
         if t < (2*l + 1) * self.ns:
@@ -111,6 +113,8 @@ class ANN:
 
         return lr
 
+    def linear_lr(self, epoch):
+        return (epoch+1) * 0.005
 
     def plot_graphs(self, train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist):
         plt.title('accuracy evolution')
@@ -142,7 +146,17 @@ class ANN:
         """
         s1 = np.dot(self.w1, X) + self.b1
         h = np.maximum(0, s1)
+
+        if self.dropout:
+           h = np.where(np.random.random(h.shape) < self.dropout, 0, h)
+           h /= (1-self.dropout)
+
         s2 = np.dot(self.w2, h) + self.b2
+
+        if self.dropout:
+            s2 = np.where(np.random.random(s2.shape) < self.dropout, 0, s2)
+            s2 /= (1-self.dropout)
+
         p = self.softmax(s2)
 
         return p, h
@@ -193,17 +207,15 @@ class ANN:
         return grad_w1, grad_b1, grad_w2, grad_b2
 
     def check_gradients(self, X, y_true):
-
-        grad_w1, grad_b1, grad_w2, grad_b2 = self.compute_gradients(X, y_true)
-        grad_w1_num, grad_b1_num, grad_w2_num, grad_b2_num = self.ComputeGradsNum(X, y_true, self.w1, self.w2, self.b1, self.b2, self.lamda, 1e-6)
+        grad_w1, _, _, _ = self.compute_gradients(X, y_true)
+        grad_w1_num, _, _, _ = self.ComputeGradsNum(X, y_true, self.w1, self.w2, self.b1, self.b2, self.lamda, 1e-6)
 
         mean_re = np.mean(abs(grad_w1 - grad_w1_num) / np.maximum(abs(grad_w1) + abs(grad_w1_num), np.finfo(float).eps))
 
         print("Mean Squared Error:\t{:.2e}".format(np.mean((grad_w1 - grad_w1_num) ** 2)))
-        print("Mean Relative Error:\t{:.2e}".format(mean_re))
+        print("Mean Relative Error:\t{:.2e}".format(mean_re)) 
 
     def EvaluateClassifier(self, X, W1, W2, b1, b2):
-
         s1 = np.dot(W1, X) + b1
         h = np.maximum(0, s1)
         s2 = np.dot(W2, h) + b2
@@ -212,13 +224,11 @@ class ANN:
         return p
 
     def ComputeCost(self, X, Y, W1, W2, b1, b2, lam):
-
         y_pred = self.EvaluateClassifier(X, W1, W2, b1, b2)
 
         return self.cross_entropy(Y, y_pred) / X.shape[1] + lam * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
 
     def ComputeGradsNum(self, X, Y, W1, W2, b1, b2, lam, h):
-
         grad_W1 = np.zeros(W1.shape)
         grad_b1 = np.zeros(b1.shape)
         grad_W2 = np.zeros(W2.shape)
@@ -255,9 +265,6 @@ class ANN:
         return grad_W1, grad_b1, grad_W2, grad_b2
 
     def ComputeGradsNumSlow(self, X, Y, W1, W2, b1, b2, lam, h):
-
-        P, _ = self.evaluate_classifier(X)
-        
         grad_W1 = np.zeros(W1.shape)
         grad_b1 = np.zeros(b1.shape)
         grad_W2 = np.zeros(W2.shape)
