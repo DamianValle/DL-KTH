@@ -14,37 +14,54 @@ class ANN:
         self.d = 3072
         self.num_hidden = 512
 
-        self.lamda = 6 * 1e-4
+        self.lamda = 0.005
         self.batch_size = 100
         self.epochs = 300
         self.lr = 1e-5
-        self.xavier = True
-        self.jitter = True
-        self.dropout = 0.25
+        self.jitter = False
 
         self.lr_min = 1e-5
-        self.lr_max = 2e-2
+        self.lr_max = 1e-2
         self.ns = -1
-        self.num_cycles = 6
+        self.num_cycles = 2
+
+        self.h_nodes = [50, 30, 20, 20, 10, 10, 10, 10]
+        self.num_layers = len(self.h_nodes)
 
         self.plot = True
 
         self.init_weights_and_biases()
 
     def init_weights_and_biases(self):
-        if self.xavier:
-            self.w1 = np.random.normal(self.gauss_mean, 1 / np.sqrt(self.d), (self.num_hidden, self.d))
-            self.w2 = np.random.normal(self.gauss_mean, 1 / np.sqrt(self.num_hidden), (self.k, self.num_hidden))
-        else:
-            self.w1 = np.random.normal(self.gauss_mean, self.gauss_std, (self.num_hidden, self.d))
-            self.w2 = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.num_hidden))
+        """
+        self.w matrix shape structure: [(d, h_1), (h_1, h_2), ..., (h_n-1, h_n), (h_n, k)]
+        """
 
-        self.b1 = np.zeros((self.num_hidden, 1))
-        self.b2 = np.zeros((self.k, 1))
+        sigma_weights_w = np.zeros(self.num_layers + 1)
+        sigma_weights_w[0] = 1 / np.sqrt(self.d)
+        for i in range(1, self.num_layers + 1):
+            sigma_weights_w[i] = 1 / np.sqrt(self.h_nodes[i-1])
+
+        #meter aqui None??
+        #self.w = [np.zeros((2, 2))] * (self.num_layers + 1)
+        self.w = [None] * (self.num_layers + 1)
+        self.b = [None] * (self.num_layers + 1)
+
+        self.w[0] = np.random.normal(self.gauss_mean, sigma_weights_w[0], (self.h_nodes[0], self.d))
+        for i in range(1, self.num_layers):
+            self.w[i] = np.random.normal(self.gauss_mean, sigma_weights_w[i], (self.h_nodes[i], self.h_nodes[i-1]))
+        self.w[self.num_layers] = np.random.normal(self.gauss_mean, sigma_weights_w[self.num_layers], (self.k, self.h_nodes[self.num_layers-1]))
+
+        for i in range(self.num_layers):
+            self.b[i] = np.zeros((self.h_nodes[i], 1))
+        self.b[self.num_layers] = np.zeros((self.k, 1))
+
+        for i in self.w:
+            print(i.shape)
 
     def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
         num_batches = int(x_train.shape[1] / self.batch_size)
-        self.ns = 10 * num_batches
+        self.ns = 75 * 45000 / num_batches
 
         train_cost_hist = []
         train_acc_hist = []
@@ -65,15 +82,15 @@ class ANN:
                 x_batch = x_train[:, j_start:j_end]
                 y_batch = y_train[:, j_start:j_end]
 
-                if self.jitter:
-                    x_batch += 0.01 * np.random.randn(*x_batch.shape)
+                #if self.jitter:
+                #    x_batch += 0.01 * np.random.randn(*x_batch.shape)
 
-                grad_w1, grad_b1, grad_w2, grad_b2 = self.compute_gradients(x_batch, y_batch)
+                grad_w, grad_b = self.compute_gradients(x_batch, y_batch)
 
-                self.w1 -= self.lr * grad_w1
-                self.b1 -= self.lr * grad_b1
-                self.w2 -= self.lr * grad_w2
-                self.b2 -= self.lr * grad_b2
+                # meter esto a un lambda o algo
+                for k in range(self.num_layers+1):
+                    self.w[k] -= self.lr * grad_w[k]
+                    self.b[k] -= self.lr * grad_b[k]
 
                 t += 1
                 if t == self.ns * self.num_cycles + 1:
@@ -102,6 +119,9 @@ class ANN:
 
         if self.plot:
             self.plot_graphs(train_acc_hist, train_cost_hist, val_acc_hist, val_cost_hist)
+
+    def update_mu_std_avg(self, mu, std):
+        self.mu_avg = mu if self.mu_avg == None else [self.alpha * self.mu_avg[l] + (1 - self.alpha) * mu[l] for l in range(len(mu))]
 
     def cyclical_lr(self, t):
         l = int(t / (2*self.ns))
@@ -144,27 +164,32 @@ class ANN:
 
         output: n x k
         """
-        s1 = np.dot(self.w1, X) + self.b1
-        h = np.maximum(0, s1)
 
-        if self.dropout:
-           h = np.where(np.random.random(h.shape) < self.dropout, 0, h)
-           h /= (1-self.dropout)
+        act_h = [None] * (self.num_layers)
+        s = [None] * (self.num_layers+1)
 
-        s2 = np.dot(self.w2, h) + self.b2
+        # first layer
+        s[0] = np.dot(self.w[0], X) + self.b[0]
+        act_h[0] = np.maximum(0, s[0])
 
-        if self.dropout:
-            s2 = np.where(np.random.random(s2.shape) < self.dropout, 0, s2)
-            s2 /= (1-self.dropout)
+        # hidden layers
+        for i in range(1, self.num_layers):
+            s[i] = np.dot(self.w[i], act_h[i-1]) + self.b[i]
+            act_h[i] = np.maximum(0, s[i])
 
-        p = self.softmax(s2)
+        # last layer
+        s[self.num_layers] = np.dot(self.w[self.num_layers], act_h[self.num_layers-1]) + self.b[self.num_layers]
 
-        return p, h
+        p = self.softmax(s[self.num_layers])
+
+        return p, act_h, s
 
     def compute_cost(self, X, y_true):
-        y_pred, _ = self.evaluate_classifier(X)
+        y_pred, _, _ = self.evaluate_classifier(X)
 
-        return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * (np.sum(self.w1 ** 2) + np.sum(self.w2 ** 2))
+        reg_term = sum(list(map(lambda x: np.sum(x**2), self.w)))
+
+        return self.cross_entropy(y_true, y_pred) / X.shape[1] + self.lamda * reg_term
 
     def cross_entropy(self, y_true, y_pred):
         conf = np.sum(y_true * y_pred, axis=0)
@@ -180,7 +205,7 @@ class ANN:
         y_true, y_pred: k x n
         """
 
-        y_pred, _ = self.evaluate_classifier(X)
+        y_pred, _, _ = self.evaluate_classifier(X)
         match = len(np.where(np.argmax(y_true, axis=0) == np.argmax(y_pred, axis=0))[0])
 
         return match/y_true.shape[1]
@@ -192,19 +217,52 @@ class ANN:
         """
         size = y_true.shape[1]
 
-        y_pred, h = self.evaluate_classifier(X)
+        grad_b = [None]*(self.num_layers+1)
+        grad_w = [None]*(self.num_layers+1)
+
+        y_pred, act_h, s = self.evaluate_classifier(X)
+
         g_batch = y_pred - y_true
 
-        grad_w2 = np.dot(g_batch, h.T) / size + 2 * self.lamda * self.w2
-        grad_b2 = np.sum(g_batch, axis=1).reshape(-1,1) / size
+        # gradient of W and b for the last layer
+        grad_w[-1] = np.dot(g_batch, act_h[self.num_layers - 1].T) / size + 2 * self.lamda * self.w[self.num_layers]
+        grad_b[-1] = np.dot(g_batch, np.ones((self.batch_size,1))) / size
+        #grad_b[-1] = np.sum(g_batch, axis=1).reshape(-1,1) / size
 
-        g_batch = np.dot(self.w2.T, g_batch)
-        g_batch = np.where(h > 0, g_batch, 0)
+        #propagate the gradient to previous layers
+        g_batch = np.dot(self.w[-1].T, g_batch)
 
-        grad_w1 = np.dot(g_batch, X.T) / size + 2 * self.lamda * self.w1
-        grad_b1 = np.sum(g_batch, axis=1).reshape(-1, 1) / size
+        # this is gbatch * ind(X_batch[-2] > 0)
+        layers_input = act_h[self.num_layers-1]
+        h_act_ind = np.zeros(layers_input.shape)
+        for k in range(layers_input.shape[0]):
+            for j in range(layers_input.shape[1]):
+                if layers_input[k,j] > 0:
+                    h_act_ind[k, j] = 1
+        g_batch = g_batch * h_act_ind
 
-        return grad_w1, grad_b1, grad_w2, grad_b2
+        for l in reversed(range(self.num_layers)):
+            if l == 0:
+                grad_w[l] = np.dot(g_batch, X.T) / size + 2 * self.lamda*self.w[l]
+            else:
+                grad_w[l] = np.dot(g_batch, act_h[l-1].T) / size + 2 * self.lamda * self.w[l]
+
+            #grad_b[l] = np.sum(g_batch, axis=1).reshape(-1, 1) / size
+            grad_b[l] = np.dot(g_batch, np.ones((self.batch_size,1))) / size
+
+            if l > 0:
+                g_batch = np.dot(self.w[l].T, g_batch)
+                # layers_input is the input to layer i (which is the activation of the previous layer)
+                layers_input = act_h[l-1]
+                h_act_ind = np.zeros(layers_input.shape)
+
+                for k in range(layers_input.shape[0]):
+                    for j in range(layers_input.shape[1]):
+                        if layers_input[k,j] > 0:
+                            h_act_ind[k, j] = 1
+                g_batch = g_batch * h_act_ind
+
+        return grad_w, grad_b
 
     def check_gradients(self, X, y_true):
         grad_w1, _, _, _ = self.compute_gradients(X, y_true)
