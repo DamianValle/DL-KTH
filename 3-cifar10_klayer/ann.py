@@ -10,19 +10,19 @@ class ANN:
     def __init__(self):
         self.k = 10
         self.gauss_mean = 0
-        self.gauss_std = 0.01
+        self.gauss_std = 1e-1
         self.d = 3072
-        self.num_hidden = 512
 
         self.lamda = 0.005
         self.batch_size = 100
         self.epochs = 300
         self.lr = 1e-5
         self.jitter = False
-        self.batch_norm = True
+        self.batch_norm = False
+        self.he_init = True
 
         self.lr_min = 1e-5
-        self.lr_max = 1e-2
+        self.lr_max = 1e-1
         self.ns = -1
         self.num_cycles = 2
         self.alpha = 0.7
@@ -34,6 +34,35 @@ class ANN:
 
         self.init_weights_and_biases()
         self.init_gamma_and_beta()
+
+    def init_weights_and_biases(self):
+        """
+        self.w matrix shape structure: [(d, h_1), (h_1, h_2), ..., (h_n-1, h_n), (h_n, k)]
+        """
+
+        self.w = [None] * (self.num_layers + 1)
+        self.b = [None] * (self.num_layers + 1)
+
+        if self.he_init:
+            sigma_weights_w = np.zeros(self.num_layers + 1)
+            sigma_weights_w[0] = np.sqrt(2 / self.d)
+            for i in range(1, self.num_layers + 1):
+                sigma_weights_w[i] = np.sqrt(2 / self.h_nodes[i-1])
+
+            self.w[0] = np.random.normal(self.gauss_mean, sigma_weights_w[0], (self.h_nodes[0], self.d))
+            for i in range(1, self.num_layers):
+                self.w[i] = np.random.normal(self.gauss_mean, sigma_weights_w[i], (self.h_nodes[i], self.h_nodes[i-1]))
+            self.w[self.num_layers] = np.random.normal(self.gauss_mean, sigma_weights_w[self.num_layers], (self.k, self.h_nodes[self.num_layers-1]))
+        
+        else:
+            self.w[0] = np.random.normal(self.gauss_mean, self.gauss_std, (self.h_nodes[0], self.d))
+            for i in range(1, self.num_layers):
+                self.w[i] = np.random.normal(self.gauss_mean, self.gauss_std, (self.h_nodes[i], self.h_nodes[i-1]))
+            self.w[self.num_layers] = np.random.normal(self.gauss_mean, self.gauss_std, (self.k, self.h_nodes[self.num_layers-1]))
+
+        for i in range(self.num_layers):
+            self.b[i] = np.zeros((self.h_nodes[i], 1))
+        self.b[self.num_layers] = np.zeros((self.k, 1))
 
     def init_gamma_and_beta(self):
         self.gamma = [None] * (self.num_layers)
@@ -47,33 +76,10 @@ class ANN:
         self.mu_avg = None
         self.var_avg = None
 
-    def init_weights_and_biases(self):
-        """
-        self.w matrix shape structure: [(d, h_1), (h_1, h_2), ..., (h_n-1, h_n), (h_n, k)]
-        """
-
-        sigma_weights_w = np.zeros(self.num_layers + 1)
-        sigma_weights_w[0] = 1 / np.sqrt(self.d)
-        for i in range(1, self.num_layers + 1):
-            sigma_weights_w[i] = 1 / np.sqrt(self.h_nodes[i-1])
-
-        #meter aqui None??
-        #self.w = [np.zeros((2, 2))] * (self.num_layers + 1)
-        self.w = [None] * (self.num_layers + 1)
-        self.b = [None] * (self.num_layers + 1)
-
-        self.w[0] = np.random.normal(self.gauss_mean, sigma_weights_w[0], (self.h_nodes[0], self.d))
-        for i in range(1, self.num_layers):
-            self.w[i] = np.random.normal(self.gauss_mean, sigma_weights_w[i], (self.h_nodes[i], self.h_nodes[i-1]))
-        self.w[self.num_layers] = np.random.normal(self.gauss_mean, sigma_weights_w[self.num_layers], (self.k, self.h_nodes[self.num_layers-1]))
-
-        for i in range(self.num_layers):
-            self.b[i] = np.zeros((self.h_nodes[i], 1))
-        self.b[self.num_layers] = np.zeros((self.k, 1))
-
     def train(self, x_train, y_train, x_val, y_val, x_test, y_test):
         num_batches = int(x_train.shape[1] / self.batch_size)
-        self.ns = 75 * 45000 / num_batches
+
+        self.ns = 5 * 45000 / self.batch_size
 
         train_cost_hist = []
         train_acc_hist = []
@@ -94,8 +100,8 @@ class ANN:
                 x_batch = x_train[:, j_start:j_end]
                 y_batch = y_train[:, j_start:j_end]
 
-                #if self.jitter:
-                #    x_batch += 0.01 * np.random.randn(*x_batch.shape)
+                if self.jitter:
+                    x_batch += 0.15 * np.random.randn(*x_batch.shape)
 
                 grad_w, grad_b, grad_beta, grad_gamma = self.compute_gradients(x_batch, y_batch)
                 self.parameter_step(grad_w, grad_b, grad_beta, grad_gamma)
@@ -376,13 +382,70 @@ class ANN:
         return g_batch
 
     def check_gradients(self, X, y_true):
-        grad_w1, _, _, _ = self.compute_gradients(X, y_true)
-        grad_w1_num, _, _, _ = self.ComputeGradsNum(X, y_true, self.w1, self.w2, self.b1, self.b2, self.lamda, 1e-6)
+        grad_w, _, _, _ = self.compute_gradients(X, y_true)
+        grad_w_num, _, _, _ = self.compute_numerical_gradients(X, y_true, h=1e-6)
 
-        mean_re = np.mean(abs(grad_w1 - grad_w1_num) / np.maximum(abs(grad_w1) + abs(grad_w1_num), np.finfo(float).eps))
+        grad_w = grad_w[0]
+        grad_w_num = grad_w_num[0]
 
-        print("Mean Squared Error:\t{:.2e}".format(np.mean((grad_w1 - grad_w1_num) ** 2)))
-        print("Mean Relative Error:\t{:.2e}".format(mean_re)) 
+        mean_re = np.mean(abs(grad_w - grad_w_num) / np.maximum(abs(grad_w) + abs(grad_w_num), np.finfo(float).eps))
+
+        print("Mean Squared Error:\t{:.2e}".format(np.mean((grad_w - grad_w_num) ** 2)))
+        print("Mean Relative Error:\t{:.2e}".format(mean_re))
+
+    def compute_numerical_gradients(self, x, y, h):
+        grad_w = []
+        grad_b = []
+        grad_gamma = []
+        grad_beta = []
+
+        for i in range(self.num_layers):
+            print('Computing numerical gradients... Layer ', str(i + 1))
+            grad_w.append(np.zeros_like(self.w[i]))
+            grad_b.append(np.zeros_like(self.b[i]))
+
+            for j in range(len(self.b[i])):
+                self.b[i][j] -= h
+                c1 = self.compute_cost(x, y)
+                self.b[i][j] += 2 * h
+                c2 = self.compute_cost(x, y)
+
+                grad_b[i][j] = (c2 - c1) / (2 * h)
+                self.b[i][j] -= h
+
+            for j in range(self.w[i].shape[0]):
+                for l in range(self.w[i].shape[1]):
+                    self.w[i][j, l] -= h
+                    c1 = self.compute_cost(x, y)
+                    self.w[i][j, l] += 2 * h
+                    c2 = self.compute_cost(x, y)
+
+                    grad_w[i][j, l] = (c2 - c1) / (2 * h)
+                    self.w[i][j, l] -= h
+
+        for i in range(self.num_layers - 1):
+            grad_gamma.append(np.zeros_like(self.gamma[i]))
+            grad_beta.append(np.zeros_like(self.beta[i]))
+
+            for j in range(len(self.gamma[i])):
+                self.gamma[i][j] -= h
+                c1 = self.compute_cost(x, y)
+                self.gamma[i][j] += 2 * h
+                c2 = self.compute_cost(x, y)
+
+                grad_gamma[i][j] = (c2 - c1) / (2 * h)
+                self.gamma[i][j] -= h
+
+            for j in range(len(self.beta[i])):
+                self.beta[i][j] -= h
+                c1 = self.compute_cost(x, y)
+                self.beta[i][j] += 2 * h
+                c2 = self.compute_cost(x, y)
+
+                grad_beta[i][j] = (c2 - c1) / (2 * h)
+                self.beta[i][j] -= h
+
+        return grad_w, grad_b, grad_gamma, grad_beta
 
     def EvaluateClassifier(self, X, W1, W2, b1, b2):
         s1 = np.dot(W1, X) + b1

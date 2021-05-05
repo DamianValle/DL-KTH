@@ -31,7 +31,7 @@ def main():
     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
 
     # Lambda optimization search
-    # for lamda in np.power(10, np.linspace(-5, -1, 8)):
+    # for lamda in 5 * np.power(10, np.linspace(-5, -4, 8)):
     #     print("\nTraining network for lambda =", str(lamda))
     #     ann = ANN(lamda)
     #     ann.train(x_train, y_train, x_val, y_val, x_test, y_test)
