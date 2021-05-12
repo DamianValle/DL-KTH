@@ -6,6 +6,7 @@ class DataLoader():
     def __init__(self, file_path):
         self.book_string = self.read_book(file_path)
         self.book_chars = list(self.book_string)
+        self.book_length = len(self.book_string)
 
         self.idx2char = self.read_unique_chars()
         self.char2idx = self.create_dict()
@@ -45,12 +46,10 @@ class DataLoader():
         return onehot
 
     def get_batch(self, i, seq_length):
-        # improve performance by taking from i to i+seq+1 and then getting rid of ony start and end
-        X_chars = self.book_chars[i: i+seq_length]
-        Y_chars = self.book_chars[i+1: i+seq_length+1]
+        onehot_chars = self.chars2onehot(self.book_chars[i: i+seq_length+1])
 
-        X = self.chars2onehot(X_chars)
-        Y = self.chars2onehot(Y_chars)
+        X = onehot_chars[:,:-1]
+        Y = onehot_chars[:,1:]
 
         return X, Y
 

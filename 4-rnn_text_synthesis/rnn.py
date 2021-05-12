@@ -15,6 +15,9 @@ class RNN:
         self.k = 80             # number of unique characters
         self.sig = 0.1          # weight initial std
         self.h_num = 1e-4       # step size for numerical gradient computations
+        self.e = 0              # book pointer
+        self.its = 350000       # number of iterations
+        self.best_loss = 500    # used to save best model
 
         self.grads = {}
         self.data = DataLoader('goblet_book.txt')
@@ -31,13 +34,41 @@ class RNN:
         self.weights['v'] = np.random.rand(self.k, self.m) * self.sig
         self.weights['w'] = np.random.rand(self.m, self.m) * self.sig
 
+        self.sum_grad2 = {}
+        for key in self.weights:
+            self.sum_grad2[key] = np.zeros_like(self.weights[key])
+
+    def train(self):
+        smooth_loss = None
         self.h_prev = np.zeros((self.m, 1))
-        self.x_prev = np.zeros((self.k, 1))
+
+        for i in range(self.its):
+
+            X, Y = self.data.get_batch(self.e, self.seq_length)
+
+            if i % 10000 == 0:
+                self.generate(200, X[:, 1])
+
+            self.update_e()
+            p, a, h = self.forward(X)
+            loss = self.loss(p, Y)
+            smooth_loss = self.smooth_loss(smooth_loss, loss)
+
+            if smooth_loss < self.best_loss:
+                self.best_loss = smooth_loss
+                self.best_weights = self.weights
+
+            self.backward(X, Y, p, a, h)
+            self.step()
+
+            if i % 1000 == 0:
+                print('# iterations:{}\t smooth_loss={}'.format(i, round(smooth_loss, 3)))
+                print('pointer at {}% of the book\n'.format(int(100 * self.e / self.data.book_length)))
+
+        self.weights = self.best_weights
+        self.generate(1000, X[:, 1])
 
     def forward(self, X):
-
-        self.h_prev = np.zeros((self.m, 1))
-
         p = np.zeros((X.shape[1], self.k))
         a = np.zeros((X.shape[1], self.m))
         h = np.zeros((X.shape[1], self.m))
@@ -92,11 +123,11 @@ class RNN:
             xt = X[:,t].reshape(self.k, 1)
             grad_u += np.dot(grad_a[t].reshape(self.m,1), xt.T)
 
-        self.grads['b'] = grad_b
-        self.grads['c'] = grad_c
-        self.grads['u'] = grad_u
-        self.grads['v'] = grad_v
-        self.grads['w'] = grad_w
+        self.grads['b'] = np.clip(grad_b, -5, 5)
+        self.grads['c'] = np.clip(grad_c, -5, 5)
+        self.grads['u'] = np.clip(grad_u, -5, 5)
+        self.grads['v'] = np.clip(grad_v, -5, 5)
+        self.grads['w'] = np.clip(grad_w, -5, 5)
 
     def loss(self, p, y):
         loss = 0
@@ -105,30 +136,49 @@ class RNN:
 
         return loss
 
-    def synthesize(self, n):
+    def smooth_loss(self, smooth_loss, new_loss):
+        if smooth_loss == None:
+            smooth_loss = new_loss
+        else:
+            smooth_loss = 0.999 * smooth_loss + 0.001 * new_loss
+
+        return smooth_loss
+
+    def step(self):
+        for key in self.weights:
+            self.sum_grad2[key] += np.square(self.grads[key])
+            self.weights[key] -= self.grads[key] * self.eta / np.sqrt(self.sum_grad2[key] + np.finfo(float).eps)
+
+    def generate(self, n, x0):
+        p, a, h = self.synthesize(n, x0)
+        onehot_seq = np.array([self.sample_char(pt) for pt in p])
+
+        print('\n================= generated text =================')
+        print(self.data.onehot2string(onehot_seq))
+        print('==================================================\n')
+
+    def synthesize(self, n, x0):
         p = np.zeros((n, self.k))
         a = np.zeros((n, self.m))
         h = np.zeros((n, self.m))
 
-        self.h_prev = np.zeros((self.m, 1))
-        self.x_prev = np.zeros((self.k, 1))
-        self.x_prev[0] = 1
+        self.x_prev = x0.reshape((self.k, 1))
+        h_t = self.h_prev
 
         for t in range(n):
             x_t = self.x_prev
-            a_t = np.dot(self.w, self.h_prev)
-            a_t += np.dot(self.u, x_t)
-            a_t += self.b
+            a_t = np.dot(self.weights['w'], h_t)
+            a_t += np.dot(self.weights['u'], x_t)
+            a_t += self.weights['b']
             h_t = np.tanh(a_t)
-            o_t = np.dot(self.v, h_t) + self.c
+            o_t = np.dot(self.weights['v'], h_t) + self.weights['c']
             p_t = self.softmax(o_t)
 
             a[t] = a_t.reshape(self.m)
             h[t] = h_t.reshape(self.m)
             p[t] = p_t.reshape(self.k)
 
-            self.h_prev = h_t
-            self.x_prev = x_t
+            self.x_prev = self.sample_char(p[t]).reshape((self.k, 1))
 
         return p, a, h
 
@@ -140,12 +190,13 @@ class RNN:
 
         return onehot_sample
 
-    def generate(self, n):
-        p, a, h = self.synthesize(n)
-        print(p)
-        onehot_seq = np.array([self.sample_char(pt) for pt in p])
-
-        return self.data.onehot2string(onehot_seq)
+    def update_e(self):
+        if self.e + self.seq_length + 25 >= self.data.book_length:
+            print('reseting book pointer')
+            self.e = 0
+            self.h_prev = np.zeros((self.m, 1))
+        else:
+            self.e += self.seq_length
 
     def softmax(self, x):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -192,4 +243,4 @@ class RNN:
 
 if __name__ == '__main__':
     rnn = RNN()
-    rnn.check_gradients()
+    rnn.train()
