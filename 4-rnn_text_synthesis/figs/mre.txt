@@ -1,0 +1,5 @@
+Mean Relative Error for grad_b: 2.030966274328119e-09
+Mean Relative Error for grad_c: 7.051639570553393e-10
+Mean Relative Error for grad_u: 4.646704058515609e-10
+Mean Relative Error for grad_v: 2.378137370869567e-09
+Mean Relative Error for grad_w: 7.031375696262377e-09

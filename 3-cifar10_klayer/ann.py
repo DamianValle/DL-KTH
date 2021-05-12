@@ -191,13 +191,10 @@ class ANN:
         mu =        [None] * (self.num_layers)
         var =       [None] * (self.num_layers)
 
-        # first layer
         s[0] = np.dot(self.w[0], X) + self.b[0]
 
         if self.batch_norm:
-            #mu[0] = np.sum(s[0], axis = 1) / s[0].shape[1]
             mu[0] = np.mean(s[0], axis = 1)
-            #var[0] = 1/ s[0].shape[1] * np.sum(((s[0].T - mu[0]).T)**2, axis = 1)
             var[0] = np.var(s[0], axis = 1)
             norm_s[0] = self.batch_normalize(s[0], mu[0], var[0])
             final_s[0] = self.gamma[0] * norm_s[0] + self.beta[0]
@@ -206,14 +203,11 @@ class ANN:
         else:
             act_h[0] = np.maximum(0, s[0])
 
-        # hidden layers
         for i in range(1, self.num_layers):
             s[i] = np.dot(self.w[i], act_h[i-1]) + self.b[i]
 
             if self.batch_norm:
-                #mu[i] = 1/s[i].shape[1] * np.sum(s[i], axis = 1)
                 mu[i] = np.mean(s[i], axis = 1)
-                #var[i] = 1/ s[i].shape[1] * np.sum(((s[i].T - mu[i]).T)**2, axis = 1)
                 var[i] = np.var(s[i], axis = 1)
                 norm_s[i] = self.batch_normalize(s[i], mu[i], var[i])
                 final_s[i] = self.gamma[i] * norm_s[i] + self.beta[i]
@@ -222,9 +216,7 @@ class ANN:
             else:
                 act_h[i] = np.maximum(0, s[i])
 
-        # last layer
         s[self.num_layers] = np.dot(self.w[self.num_layers], act_h[self.num_layers-1]) + self.b[self.num_layers]
-
         p = self.softmax(s[self.num_layers])
 
         if self.batch_norm:
@@ -240,11 +232,9 @@ class ANN:
         mu =        [None] * (self.num_layers)
         var =       [None] * (self.num_layers)
 
-        # first layer
         s[0] = np.dot(self.w[0], X) + self.b[0]
 
         if self.batch_norm:
-
             norm_s[0] = self.batch_normalize(s[0], self.mu_avg[0], self.var_avg[0])
             final_s[0] = self.gamma[0] * norm_s[0] + self.beta[0]
 
@@ -252,7 +242,6 @@ class ANN:
         else:
             act_h[0] = np.maximum(0, s[0])
 
-        # hidden layers
         for i in range(1, self.num_layers):
             s[i] = np.dot(self.w[i], act_h[i-1]) + self.b[i]
 
@@ -264,7 +253,6 @@ class ANN:
             else:
                 act_h[i] = np.maximum(0, s[i])
 
-        # last layer
         s[self.num_layers] = np.dot(self.w[self.num_layers], act_h[self.num_layers-1]) + self.b[self.num_layers]
         p = self.softmax(s[self.num_layers])
 
@@ -321,15 +309,11 @@ class ANN:
 
         g_batch = y_pred - y_true
 
-        # gradient of W and b for the last layer
         grad_w[-1] = np.dot(g_batch, act_h[self.num_layers - 1].T) / size + 2 * self.lamda * self.w[self.num_layers]
         grad_b[-1] = np.dot(g_batch, np.ones((self.batch_size,1))) / size
-        #grad_b[-1] = np.sum(g_batch, axis=1).reshape(-1,1) / size
 
-        #propagate the gradient to previous layers
         g_batch = np.dot(self.w[-1].T, g_batch)
 
-        # this is gbatch * ind(X_batch[-2] > 0)
         layers_input = act_h[self.num_layers-1]
         h_act_ind = np.zeros(layers_input.shape)
         for k in range(layers_input.shape[0]):
@@ -352,12 +336,10 @@ class ANN:
             else:
                 grad_w[l] = np.dot(g_batch, act_h[l-1].T) / size + 2 * self.lamda * self.w[l]
 
-            #grad_b[l] = np.sum(g_batch, axis=1).reshape(-1, 1) / size
             grad_b[l] = np.dot(g_batch, np.ones((size,1))) / size
 
             if l > 0:
                 g_batch = np.dot(self.w[l].T, g_batch)
-                # layers_input is the input to layer i (which is the activation of the previous layer)
                 layers_input = act_h[l-1]
                 h_act_ind = np.zeros(layers_input.shape)
 
@@ -372,12 +354,12 @@ class ANN:
     def batchnorm_backward(self, g_batch, s_batch, mu, var, size):
         sigma_1 = ((var + 1e-6)**(-0.5)).T
         sigma_2 = ((var + 1e-6)**(-1.5)).T
-        bigG1 = g_batch * np.outer(sigma_1, np.ones((size,1)))
-        bigG2 = g_batch * np.outer(sigma_2, np.ones((size,1)))
-        bigD = s_batch - np.outer(mu, np.ones((size,1)))
-        c = np.dot((bigG2 * bigD), np.ones((size,1)))
-        g_batch = bigG1 - 1/size * np.dot(bigG1, np.ones((size,1)))
-        g_batch -= 1 / size * (bigD * np.outer(c, np.ones((size))))
+        g1 = g_batch * np.outer(sigma_1, np.ones((size,1)))
+        g2 = g_batch * np.outer(sigma_2, np.ones((size,1)))
+        D = s_batch - np.outer(mu, np.ones((size,1)))
+        c = np.dot((g2 * D), np.ones((size,1)))
+        g_batch = g1 - 1/size * np.dot(g1, np.ones((size,1)))
+        g_batch -= 1 / size * (D * np.outer(c, np.ones((size))))
 
         return g_batch
 
@@ -446,106 +428,3 @@ class ANN:
                 self.beta[i][j] -= h
 
         return grad_w, grad_b, grad_gamma, grad_beta
-
-    def EvaluateClassifier(self, X, W1, W2, b1, b2):
-        s1 = np.dot(W1, X) + b1
-        h = np.maximum(0, s1)
-        s2 = np.dot(W2, h) + b2
-        p = self.softmax(s2)
-
-        return p
-
-    def ComputeCost(self, X, Y, W1, W2, b1, b2, lam):
-        y_pred = self.EvaluateClassifier(X, W1, W2, b1, b2)
-
-        return self.cross_entropy(Y, y_pred) / X.shape[1] + lam * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
-
-    def ComputeGradsNum(self, X, Y, W1, W2, b1, b2, lam, h):
-        grad_W1 = np.zeros(W1.shape)
-        grad_b1 = np.zeros(b1.shape)
-        grad_W2 = np.zeros(W2.shape)
-        grad_b2 = np.zeros(b2.shape)
-
-        c = self.ComputeCost(X, Y, W1, W2, b1, b2, lam)
-        
-        for i in range(len(b1)):
-            b1_try = np.array(b1)
-            b1_try[i] += h
-            c2 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
-            grad_b1[i] = (c2 - c) / h
-
-        for i in range(W1.shape[0]):
-            for j in range(W1.shape[1]):
-                W1_try = np.array(W1)
-                W1_try[i,j] += h
-                c2 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
-                grad_W1[i,j] = (c2 - c) / h
-                
-        for i in range(len(b2)):
-            b2_try = np.array(b2)
-            b2_try[i] += h
-            c2 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
-            grad_b2[i] = (c2 - c) / h
-
-        for i in range(W2.shape[0]):
-            for j in range(W2.shape[1]):
-                W2_try = np.array(W2)
-                W2_try[i,j] += h
-                c2 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
-                grad_W2[i,j] = (c2 - c) / h
-
-        return grad_W1, grad_b1, grad_W2, grad_b2
-
-    def ComputeGradsNumSlow(self, X, Y, W1, W2, b1, b2, lam, h):
-        grad_W1 = np.zeros(W1.shape)
-        grad_b1 = np.zeros(b1.shape)
-        grad_W2 = np.zeros(W2.shape)
-        grad_b2 = np.zeros(b2.shape)
-        
-        for i in range(len(b1)):
-            b1_try = np.array(b1)
-            b1_try[i] -= h
-            c1 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
-
-            b1_try = np.array(b1)
-            b1_try[i] += h
-            c2 = self.ComputeCost(X, Y, W1, W2, b1_try, b2, lam)
-
-            grad_b1[i] = (c2 - c1) / (2 * h)
-
-        for i in range(W1.shape[0]):
-            for j in range(W1.shape[1]):
-                W1_try = np.array(W1)
-                W1_try[i,j] -= h
-                c1 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
-
-                W1_try = np.array(W1)
-                W1_try[i,j] += h
-                c2 = self.ComputeCost(X, Y, W1_try, W2, b1, b2, lam)
-
-                grad_W1[i,j] = (c2 - c1) / (2 * h)
-                
-        for i in range(len(b2)):
-            b2_try = np.array(b2)
-            b2_try[i] -= h
-            c1 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
-
-            b2_try = np.array(b2)
-            b2_try[i] += h
-            c2 = self.ComputeCost(X, Y, W1, W2, b1, b2_try, lam)
-
-            grad_b2[i] = (c2 - c1) / (2 * h)
-
-        for i in range(W2.shape[0]):
-            for j in range(W2.shape[1]):
-                W2_try = np.array(W2)
-                W2_try[i,j] -= h
-                c1 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
-
-                W2_try = np.array(W2)
-                W2_try[i,j] += h
-                c2 = self.ComputeCost(X, Y, W1, W2_try, b1, b2, lam)
-
-                grad_W2[i,j] = (c2 - c1) / (2 * h)
-
-        return [grad_W1, grad_W2, grad_b1, grad_b2]
